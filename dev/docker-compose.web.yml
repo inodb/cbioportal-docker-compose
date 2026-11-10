@@ -27,11 +27,11 @@ services:
       --session.service.url=http://cbioportal-session:${CP_SESSION_SERVICE_SERVER_PORT}/api/sessions/my_portal/
       --spring.datasource.driver-class-name=com.clickhouse.jdbc.ClickHouseDriver
       --spring.datasource.url=$${CP_CLICKHOUSE_URL}
-      --spring.datasource.username=$${CP_CLICKHOUSE_USER}
-      --spring.datasource.password=$${CP_CLICKHOUSE_PASSWORD}
+      --spring.datasource.username=$${CP_CLICKHOUSE_USER_FOR_CBIOPORTAL_DB_UPDATE}
+      --spring.datasource.password=$${CP_CLICKHOUSE_PASSWORD_FOR_CBIOPORTAL_DB_UPDATE}
       --spring.datasource.clickhouse.url=$${CP_CLICKHOUSE_URL}
-      --spring.datasource.clickhouse.username=$${CP_CLICKHOUSE_USER}
-      --spring.datasource.clickhouse.password=$${CP_CLICKHOUSE_PASSWORD}
+      --spring.datasource.clickhouse.username=$${CP_CLICKHOUSE_USER_FOR_CBIOPORTAL_DB_UPDATE}
+      --spring.datasource.clickhouse.password=$${CP_CLICKHOUSE_PASSWORD_FOR_CBIOPORTAL_DB_UPDATE}
       --spring.datasource.clickhouse.driver-class-name=com.clickhouse.jdbc.ClickHouseDriver
       --clickhouse_mode=$${CP_APP_CLICKHOUSE_MODE:-true}
       $${CP_APP_CUSTOM_ARGS}

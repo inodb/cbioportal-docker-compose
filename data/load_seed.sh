@@ -5,6 +5,6 @@ set -eo pipefail
 
 echo "Loading seed data..."
 gunzip -c /data/seed.sql.gz | clickhouse client \
-  --config-file ."${CP_CLICKHOUSE_CLIENT_INTERNAL_CONFIG_FOR_DB_UPDATE_PATH}" \
+  --config-file "${CP_CLICKHOUSE_CLIENT_INTERNAL_CONFIG_FOR_DB_UPDATE_PATH}" \
   --multiquery
 echo "Successfully loaded seed data."

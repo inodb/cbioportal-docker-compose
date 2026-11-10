@@ -1,4 +1,4 @@
-#/usr/bash
+#!/usr/bin/env bash
 
 set -eo pipefail
 
@@ -75,7 +75,7 @@ function version_is_older_or_equal() {
 
 function execute_clickhouse_statement() {
     local statement_string="$1"
-    clickhouse client --config-file .${CP_CLICKHOUSE_CLIENT_INTERNAL_CONFIG_FOR_DB_ADMIN_PATH} --query "$statement_string"
+    clickhouse client --config-file ${CP_CLICKHOUSE_CLIENT_INTERNAL_CONFIG_FOR_DB_ADMIN_PATH} --query "$statement_string"
 }
 
 # account may alredy exist if user has configured all three roles (db_admin / db_updater / web_app) to use the same (root privileged) account 
@@ -98,7 +98,7 @@ if [ "$account_for_db_update_user_already_exists" == "0" ] ; then
         if version_is_older_or_equal "$detected_clickhouse_version" "26.4.x" ; then
             execute_clickhouse_statement "GRANT READ ON REMOTE TO ${CP_CLICKHOUSE_USER_FOR_CBIOPORTAL_DB_UPDATE}"
         else
-            echo "Warning : initialization of clickhouse versions after 26.4 has not yet been evaluated. Problems are not expected, but be advised that version '$ver' has not yet been tested." >&2
+            echo "Warning : initialization of clickhouse versions after 26.4 has not yet been evaluated. Problems are not expected, but be advised that version '$detected_clickhouse_version' has not yet been tested." >&2
             execute_clickhouse_statement "GRANT READ ON REMOTE TO ${CP_CLICKHOUSE_USER_FOR_CBIOPORTAL_DB_UPDATE}"
         fi
     fi

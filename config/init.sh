@@ -14,10 +14,15 @@ CP_CLICKHOUSE_HTTP_INSECURE_PORT="$(output_setting_from_main_env_file CP_CLICKHO
 CP_CLICKHOUSE_HTTP_SECURE_PORT="$(output_setting_from_main_env_file CP_CLICKHOUSE_HTTP_SECURE_PORT)"
 CP_CLICKHOUSE_DB="$(output_setting_from_main_env_file CP_CLICKHOUSE_DB)"
 CP_CLICKHOUSE_USE_SECURE_TRANSPORT="$(output_setting_from_main_env_file CP_CLICKHOUSE_USE_SECURE_TRANSPORT)"
+# clickhouse-jdbc 0.6.x requests native (LZ4 block) compression with compress=1 and also sends
+# "Accept-Encoding: lz4". ClickHouse >= 25.x defaults enable_http_compression=1, so the server would
+# additionally wrap the response in HTTP-level LZ4 framing, which the driver cannot decode ("Magic is
+# not correct"). Turning off HTTP compression keeps the native compression the driver understands.
+CP_CLICKHOUSE_URL_PARAMS="custom_settings=enable_http_compression=0"
 if [ "$CP_CLICKHOUSE_USE_SECURE_TRANSPORT" == "no" ] ; then
-    CP_CLICKHOUSE_URL="jdbc:ch://${CP_CLICKHOUSE_HOST}:${CP_CLICKHOUSE_HTTP_INSECURE_PORT}/${CP_CLICKHOUSE_DB}?compress=0"
+    CP_CLICKHOUSE_URL="jdbc:ch://${CP_CLICKHOUSE_HOST}:${CP_CLICKHOUSE_HTTP_INSECURE_PORT}/${CP_CLICKHOUSE_DB}?${CP_CLICKHOUSE_URL_PARAMS}"
 else
-    CP_CLICKHOUSE_URL="jdbc:ch://${CP_CLICKHOUSE_HOST}:${CP_CLICKHOUSE_HTTP_SECURE_PORT}/${CP_CLICKHOUSE_DB}?compress=0"
+    CP_CLICKHOUSE_URL="jdbc:ch://${CP_CLICKHOUSE_HOST}:${CP_CLICKHOUSE_HTTP_SECURE_PORT}/${CP_CLICKHOUSE_DB}?${CP_CLICKHOUSE_URL_PARAMS}"
 fi
 
 # This is a hack. Docker run doesn't escape '&' but docker compose does.

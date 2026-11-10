@@ -55,10 +55,7 @@ services:
       - ./data/schema.sql:/data/schema.sql:ro
       - ./data/seed.sql.gz:/data/seed.sql.gz:ro
       - ./data/populate_derived_tables.sql:/data/populate_derived_tables.sql:ro
-      - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_WEB_APP_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_WEB_APP_PATH}:rw
-      - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH}:rw
-      - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_ADMIN_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_ADMIN_PATH}:rw
-      - ./data/write_clickhouse_client_config_files.sh:/docker-entrypoint-initdb.d/001_write_clickhouse_client_config_files.sh:ro
+      - ./data/write_clickhouse_client_config_files.sh:/cbioportal/write_clickhouse_client_config_files.sh:ro
       - ./data/create_cbioportal_database.sh:/docker-entrypoint-initdb.d/002_create_cbioportal_database.sh:ro
       - ./data/create_cbio_users_and_grant_privileges.sh:/docker-entrypoint-initdb.d/003_create_users_and_write_privileges.sh:ro
       - ./data/load_schema.sh:/docker-entrypoint-initdb.d/004_load_schema.sh:ro
@@ -66,13 +63,16 @@ services:
       - ./data/load_derived_tables.sh:/docker-entrypoint-initdb.d/006_load_derived_tables.sh:ro
       - cbioportal_clickhouse_data:/var/lib/clickhouse
       - ${CP_CLICKHOUSE_USER_SETTINGS_PATH}:/etc/clickhouse-server/users.d/001_additional_user_settings.xml
+    # The clickhouse client config files are (re)written from .env on every start, not only on first
+    # initialization, so that the initdb scripts and the healthcheck also work on an existing volume.
+    entrypoint: [ "/bin/bash", "-c", "/cbioportal/write_clickhouse_client_config_files.sh && exec /entrypoint.sh" ]
     networks:
       - cbio-net
     healthcheck:
       # Query via the container IP rather than localhost: while the initdb scripts run, ClickHouse
       # listens only on 127.0.0.1, so a localhost check can pass before other containers
       # (e.g. cbioportal-migration) are able to connect.
-      test: ["CMD-SHELL", "clickhouse client --config-file=.${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH} --host \"$$(hostname)\" --query=\"SELECT COUNT(*) FROM $$CP_CLICKHOUSE_DB.type_of_cancer\" 2>/dev/null | grep -q '^[1-9]'"]
+      test: ["CMD-SHELL", "clickhouse client --config-file=${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH} --host \"$$(hostname)\" --query=\"SELECT COUNT(*) FROM $$CP_CLICKHOUSE_DB.type_of_cancer\" 2>/dev/null | grep -q '^[1-9]'"]
       interval: 10s
       timeout: 3s
       retries: 300
