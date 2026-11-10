@@ -25,13 +25,15 @@ services:
     volumes:
       - ./study:/study/
       - ./entrypoint.sh:/cbioportal/entrypoint.sh
-      - ${APPLICATION_PROPERTIES_PATH:-./config/application.properties}:/cbioportal-webapp/application.properties:ro
+      - ${CP_APPLICATION_PROPERTIES_PATH:-./config/application.properties}:/cbioportal-webapp/application.properties:ro
       # We need to mount the derived table script into the cbioportal container
       # The metaImport script looks for it under $PORTAL_HOME
-      - ./data/clickhouse.sql:/cbioportal/clickhouse.sql:ro
+      - ./data/populate_derived_tables.sql:/cbioportal/populate_derived_tables.sql:ro
     depends_on:
       cbioportal-database:
         condition: service_healthy
+      cbioportal-migration:
+        condition: service_completed_successfully
       cbioportal-session:
         condition: service_started
     networks:
@@ -52,7 +54,7 @@ services:
     volumes:
       - ./data/schema.sql:/data/schema.sql:ro
       - ./data/seed.sql.gz:/data/seed.sql.gz:ro
-      - ./data/clickhouse.sql:/data/clickhouse.sql:ro
+      - ./data/populate_derived_tables.sql:/data/populate_derived_tables.sql:ro
       - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_WEB_APP_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_WEB_APP_PATH}:rw
       - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH}:rw
       - .${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_ADMIN_PATH}:${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_ADMIN_PATH}:rw
@@ -67,11 +69,43 @@ services:
     networks:
       - cbio-net
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse client --config-file=.${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH} --query=\"SELECT COUNT(*) FROM $$CP_CLICKHOUSE_DB.type_of_cancer\" 2>/dev/null | grep -q '^[1-9]'"]
+      # Query via the container IP rather than localhost: while the initdb scripts run, ClickHouse
+      # listens only on 127.0.0.1, so a localhost check can pass before other containers
+      # (e.g. cbioportal-migration) are able to connect.
+      test: ["CMD-SHELL", "clickhouse client --config-file=.${CP_CLICKHOUSE_CLIENT_EXTERNAL_CONFIG_FOR_DB_UPDATE_PATH} --host \"$$(hostname)\" --query=\"SELECT COUNT(*) FROM $$CP_CLICKHOUSE_DB.type_of_cancer\" 2>/dev/null | grep -q '^[1-9]'"]
       interval: 10s
       timeout: 3s
       retries: 300
       start_period: 5m
+
+  # Applies any pending base-table schema migrations (db-scripts/clickhouse/migrate/migrate_schema.sql,
+  # via migrate_db.py) before the cbioportal app starts. On a fresh install this is a no-op, since
+  # schema.sql already seeds `info` at the current db_schema_version. Runs from the cbioportal image
+  # itself (not a host-mounted script) since that image already bundles python3, a clickhouse client,
+  # and db-scripts/clickhouse/migrate/. --populate-derived-tables also repopulates derived tables
+  # automatically whenever this run actually applies one or more migrations, so docker-compose
+  # users don't need a manual step.
+  cbioportal-migration:
+    image: ${CP_DOCKER_IMAGE_CBIOPORTAL}
+    container_name: cbioportal-migration-container
+    env_file:
+      - .env
+    # migrate_db.py reads the unprefixed CLICKHOUSE_* variables; it connects as the db update user.
+    environment:
+      CLICKHOUSE_HOST: ${CP_CLICKHOUSE_HOST}
+      CLICKHOUSE_NATIVE_PORT: ${CP_CLICKHOUSE_NATIVE_INSECURE_PORT}
+      CLICKHOUSE_SECURE: ${CP_CLICKHOUSE_USE_SECURE_TRANSPORT}
+      CLICKHOUSE_USER: ${CP_CLICKHOUSE_USER_FOR_CBIOPORTAL_DB_UPDATE}
+      CLICKHOUSE_PASSWORD: ${CP_CLICKHOUSE_PASSWORD_FOR_CBIOPORTAL_DB_UPDATE}
+      CLICKHOUSE_DB: ${CP_CLICKHOUSE_DB}
+      CLICKHOUSE_OPTIMIZE_BACKOFF_SECS: ${CP_CLICKHOUSE_OPTIMIZE_BACKOFF_SECS}
+    depends_on:
+      cbioportal-database:
+        condition: service_healthy
+    networks:
+      - cbio-net
+    entrypoint: ["python3", "/cbioportal/db-scripts/clickhouse/migrate/migrate_db.py", "--populate-derived-tables"]
+    restart: "no"
 
   cbioportal-session:
     restart: unless-stopped
